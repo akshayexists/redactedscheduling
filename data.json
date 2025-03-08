@@ -1,0 +1,26 @@
+{
+  "total_weeks": 52,
+  "base_date": "2025-01-01",
+  "period_type": "weeks",
+  "period_length": 1,
+  "output_filename": "schedule.xlsx",
+  "sheet_name": "Packed",
+  "task_label": "task",
+  "penalty_parameters": {
+    "consec_penalty": 500,
+    "extra_penalty": 300,
+    "spacing_threshold": 4
+  },
+  "event_types": [
+    {"name": "A", "regular_count": 5, "final_week": 11, "deadline": 10},
+    {"name": "B", "regular_count": 6, "final_week": 19, "deadline": 18},
+    {"name": "C", "regular_count": 1, "final_week": 24, "deadline": 23},
+    {"name": "D", "regular_count": 9, "final_week": 42, "deadline": 41},
+    {"name": "E", "regular_count": 5, "final_week": 46, "deadline": 45},
+    {"name": "F", "regular_count": 3, "final_week": 52, "deadline": 50},
+    {"name": "G", "regular_count": 4}
+  ],
+  "public_holidays": [39, 47],
+  "reserved": [15, 28],
+  "unavailable": [34, 36, 37, 38, 39, 40]
+}
