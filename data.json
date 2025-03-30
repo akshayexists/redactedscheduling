@@ -1,11 +1,11 @@
 {
   "total_weeks": 52,
-  "base_date": "2025-03-31",
+  "base_date": "2025-01-1",
   "period_type": "weeks",
   "period_length": 1,
   "output_filename": "schedule.xlsx",
   "sheet_name": "Packed",
-  "task_label": "audit",
+  "task_label": "task",
   "penalty_parameters": {
     "consec_penalty": 500,
     "extra_penalty": 300,
