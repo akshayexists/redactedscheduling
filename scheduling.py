@@ -6,9 +6,9 @@ import json
 from ortools.sat.python import cp_model
 from dateutil.relativedelta import relativedelta
 
-################################
-# Data Loading & Configuration #
-################################
+##############################
+# Data Loading & Configuration
+##############################
 
 def load_data(filename="data.json"):
     """
@@ -22,8 +22,8 @@ def load_data(filename="data.json"):
       - "sheet_name": sheet name for Excel output (default "Packed")
       - "task_label": label for the scheduled task (default "event")
       - "penalty_parameters": object with keys "consec_penalty", "extra_penalty", and "spacing_threshold"
-      - "event_types": list of event type objects. Each may optionally include "final_period" and "deadline".
-      - "public_holidays", "reserved", "unavailable": lists of period numbers.
+      - "event_types": list of event type objects. Each may optionally include "final_week" and "deadline".
+      - "reserved", "public_holidays", "unavailable": lists of period numbers.
     Returns:
       A dictionary with the loaded configuration.
     """
@@ -44,27 +44,11 @@ def load_data(filename="data.json"):
     data.setdefault("task_label", "event")
     data.setdefault("penalty_parameters", {"consec_penalty": 500, "extra_penalty": 300, "spacing_threshold": 4})
     
-    # Build non-available periods.
-    reserved = set(data.get("reserved", []))
-    public_holidays = set(data.get("public_holidays", []))
-    unavail = set(data.get("unavailable", []))
-    data["non_avail"] = reserved.union(public_holidays).union(unavail)
-    
     return data
 
 ##############################
-# Helper Functions           #
+# Helper Functions
 ##############################
-
-def extract_division(s, task_label="event"):
-    """
-    Extracts the division (or task type) name from a schedule string.
-    E.g., if s is "Marine event" or "Marine event #3", returns "Marine".
-    """
-    delim = f" {task_label}"
-    if delim in s:
-        return s.split(delim)[0]
-    return s
 
 def add_period(base_date, period_number, period_type, period_length):
     """
@@ -86,12 +70,21 @@ def add_period(base_date, period_number, period_type, period_length):
     elif pt == "years":
         return base_date + relativedelta(years=multiplier * period_length)
     else:
-        # Default to weeks.
         return base_date + timedelta(weeks=multiplier * period_length)
 
-#################################
-# CP-SAT Model: Packed Schedule #
-#################################
+def extract_division(s, task_label="event"):
+    """
+    Extracts the division (or task type) name from a schedule string.
+    E.g., if s is "Marine event" or "Marine event #3", returns "Marine".
+    """
+    delim = f" {task_label}"
+    if delim in s:
+        return s.split(delim)[0]
+    return s
+
+##############################
+# CP-SAT Model: Packed Schedule
+##############################
 
 def cp_schedule_packed(fixed, total_periods, event_types, task_label, consec_penalty, extra_penalty, spacing_threshold):
     # Compute free periods (those not fixed)
@@ -104,9 +97,8 @@ def cp_schedule_packed(fixed, total_periods, event_types, task_label, consec_pen
     used_free_periods = free_periods[:R]
     eligible_for_period = {}
     for idx, period in enumerate(used_free_periods):
-        # For event types with no final_period, assume they can be scheduled any time.
-        eligible = [i for i, et in enumerate(event_types) if period < et.get("final_period", total_periods + 1)]
-
+        # For event types with no final_week, assume they can be scheduled any time.
+        eligible = [i for i, et in enumerate(event_types) if period < et.get("final_week", total_periods + 1)]
         if not eligible:
             print(f"Error: No division is eligible in free period {period}.")
             exit(1)
@@ -149,7 +141,6 @@ def cp_schedule_packed(fixed, total_periods, event_types, task_label, consec_pen
     model.Minimize(sum(penalty_terms))
     
     solver = cp_model.CpSolver()
-    # Parameter tuning.
     solver.parameters.max_time_in_seconds = 30
     solver.parameters.num_search_workers = 8
     solver.parameters.search_branching = cp_model.PORTFOLIO_SEARCH
@@ -176,7 +167,7 @@ def cp_schedule_packed(fixed, total_periods, event_types, task_label, consec_pen
     return schedule, solver.ObjectiveValue(), used_free_periods
 
 ##############################
-# Variety Penalty Function   #
+# Variety Penalty Function
 ##############################
 
 def compute_variety_penalty(schedule, total_periods, task_label="event"):
@@ -190,9 +181,9 @@ def compute_variety_penalty(schedule, total_periods, task_label="event"):
                 penalty += high_penalty
     return penalty
 
-###################################
-# Simulated Annealing Improvement #
-###################################
+##############################
+# Simulated Annealing Improvement
+##############################
 
 def simulated_annealing_improvement(schedule, used_free_periods, total_periods, event_types, task_label="event"):
     T = 1000.0
@@ -207,13 +198,13 @@ def simulated_annealing_improvement(schedule, used_free_periods, total_periods, 
         i, j = random.sample(used_free_periods, 2)
         candidate = current.copy()
         candidate[i], candidate[j] = candidate[j], candidate[i]
-        # Check feasibility: each task must occur before its division's final_period.
+        # Check feasibility: each task must occur before its division's final_week.
         feasible = True
         for period in (i, j):
             if task_label in candidate[period]:
                 div = extract_division(candidate[period], task_label)
                 for et in event_types:
-                    if et["name"] == div and period >= et.get("final_period", total_periods + 1):
+                    if et["name"] == div and period >= et.get("final_week", total_periods + 1):
                         feasible = False
                         break
             if not feasible:
@@ -232,9 +223,9 @@ def simulated_annealing_improvement(schedule, used_free_periods, total_periods, 
         T *= alpha
     return best, best_penalty
 
-##################################
-# Simple Tabu Search Improvement #
-##################################
+##############################
+# Simple Tabu Search Improvement
+##############################
 
 def tabu_search_improvement(schedule, used_free_periods, total_periods, event_types, task_label="event", iterations=100, tabu_tenure=5):
     current = schedule.copy()
@@ -259,7 +250,7 @@ def tabu_search_improvement(schedule, used_free_periods, total_periods, event_ty
                     if task_label in candidate[period]:
                         div = extract_division(candidate[period], task_label)
                         for et in event_types:
-                            if et["name"] == div and period >= et.get("final_period", total_periods + 1):
+                            if et["name"] == div and period >= et.get("final_week", total_periods + 1):
                                 feasible = False
                                 break
                     if not feasible:
@@ -281,9 +272,9 @@ def tabu_search_improvement(schedule, used_free_periods, total_periods, event_ty
         tabu_list = {move: tenure-1 for move, tenure in tabu_list.items() if tenure-1 > 0}
     return best, best_penalty
 
-############################################################
-# Hybrid Reoptimization using CP-SAT with Bound Constraint #
-############################################################
+##############################
+# Hybrid Reoptimization using CP-SAT with Bound Constraint
+##############################
 
 def cp_reoptimize_with_bound(fixed, total_periods, event_types, bound, consec_penalty, extra_penalty, task_label):
     free_periods = sorted([p for p in range(1, total_periods+1) if fixed[p] is None])
@@ -294,7 +285,7 @@ def cp_reoptimize_with_bound(fixed, total_periods, event_types, bound, consec_pe
     used_free_periods = free_periods[:R]
     eligible_for_period = {}
     for idx, period in enumerate(used_free_periods):
-        eligible = [i for i, et in enumerate(event_types) if period < et.get("final_period", total_periods + 1)]
+        eligible = [i for i, et in enumerate(event_types) if period < et.get("final_week", total_periods + 1)]
         if not eligible:
             print(f"Error: No division is eligible in free period {period}.")
             exit(1)
@@ -363,13 +354,43 @@ def cp_reoptimize_with_bound(fixed, total_periods, event_types, bound, consec_pe
     return schedule, solver.ObjectiveValue()
 
 ##############################
-# Main Scheduling Process    #
+# Date Range Formatting Function
+##############################
+
+def format_date_range(p, base_date, period_type, period_length):
+    start = add_period(base_date, p, period_type, period_length)
+    pt = period_type.lower()
+    
+    if pt == "minutes":
+        end = start + timedelta(minutes=period_length) - timedelta(seconds=1)
+        return f"{start.strftime('%H:%M:%S')} -- {end.strftime('%H:%M:%S')}"
+    elif pt == "hours":
+        end = start + timedelta(hours=period_length) - timedelta(seconds=1)
+        return f"{start.strftime('%d/%m/%y %H:%M')} -- {end.strftime('%d/%m/%y %H:%M')}"
+    elif pt in ["days", "weeks"]:
+        if pt == "weeks":
+            end = start + timedelta(weeks=period_length) - timedelta(seconds=1)
+        else:
+            end = start + timedelta(days=period_length) - timedelta(seconds=1)
+        return f"{start.strftime('%d/%m/%y')} -- {end.strftime('%d/%m/%y')}"
+    elif pt == "months":
+        end = add_period(base_date, p+1, period_type, period_length) - timedelta(seconds=1)
+        return f"{start.strftime('%B %Y')} -- {end.strftime('%B %Y')}"
+    elif pt == "years":
+        end = add_period(base_date, p+1, period_type, period_length) - timedelta(seconds=1)
+        return f"{start.strftime('%Y')} -- {end.strftime('%Y')}"
+    else:
+        end = add_period(base_date, p+1, period_type, period_length) - timedelta(seconds=1)
+        return f"{start} -- {end}"
+
+##############################
+# Main Scheduling Process
 ##############################
 
 def schedule_events():
     # Load configuration and data from JSON.
     config = load_data("data.json")
-    total_periods = config.get("total_periods", 52)  # generalised as total periods
+    total_periods = config.get("total_periods", 52)
     base_date_str = config.get("base_date", "2025-03-31")
     output_filename = config.get("output_filename", "schedule.xlsx")
     sheet_name = config.get("sheet_name", "Packed")
@@ -381,13 +402,24 @@ def schedule_events():
     
     period_type = config.get("period_type", "weeks")
     period_length = config.get("period_length", 1)
+    event_types = config["event_types"]
     
-    event_types, non_avail = config["event_types"], config["non_avail"]
-    print(f"Non-available periods: {sorted(non_avail)}")
-    available_periods = {p for p in range(1, total_periods+1) if p not in non_avail}
-    print(f"Available periods: {sorted(available_periods)}\n")
-    
-    # For event types without a final_period, set final_period to total_periods+1 and deadline to total_periods.
+    # Build fixed assignments: mark Reserved, Public Holiday, and Unavailable separately.
+    reserved = set(config.get("reserved", []))
+    public_holidays = set(config.get("public_holidays", []))
+    unavailable = set(config.get("unavailable", []))
+    fixed = {}
+    for p in range(1, total_periods+1):
+        statuses = []
+        if p in reserved:
+            statuses.append("Reserved")
+        if p in public_holidays:
+            statuses.append("Public Holiday")
+        if p in unavailable:
+            statuses.append("Unavailable")
+        fixed[p] = ", ".join(statuses) if statuses else None
+
+    # For event types without a final_week, set final_week to total_periods+1 and deadline to total_periods.
     for et in event_types:
         if "final_week" not in et or et["final_week"] in [None, ""]:
             et["final_week"] = total_periods + 1
@@ -395,22 +427,20 @@ def schedule_events():
         elif "deadline" not in et or et["deadline"] in [None, ""]:
             et["deadline"] = et["final_week"] - 1
 
-    # Build fixed assignments: mark non-available periods as "Reserved" and set Final events.
-    fixed = {}
-    for p in range(1, total_periods+1):
-        fixed[p] = "Reserved" if p in non_avail else None
+    # Build fixed assignments for Final events.
     final_event_periods = set()
     for et in event_types:
         fp = et["final_week"]
-        # Only assign a Final event if the event type has a final_period within the horizon.
         if fp <= total_periods:
             if fp in final_event_periods:
                 print(f"Error: Period {fp} is already used for a Final event; conflict for {et['name']}.")
                 exit(1)
             fixed[fp] = f"{et['name']} Final event"
             final_event_periods.add(fp)
-    # Event types with final_week == total_periods+1 have no Final event constraint.
-
+    
+    available_periods = {p for p in range(1, total_periods+1) if fixed[p] is None}
+    print(f"Available periods: {sorted(available_periods)}\n")
+    
     # Adaptive CP-SAT tuning: try several penalty parameter pairs.
     candidate_params = [(500, 300), (700, 400), (900, 500)]
     best_solution = None
@@ -443,28 +473,13 @@ def schedule_events():
     print(f"Variety Penalty (Tabu): {tabu_penalty}")
     
     improved_solution = tabu_solution.copy()
-    
-    # (Optional) Hybrid reoptimization can be activated here if desired, my initial application didn't have enough wiggle room for it to be of any use
-    
-    # reopt_solution, reopt_obj = cp_reoptimize_with_bound(fixed, total_periods, event_types, tabu_penalty, 900, 500, task_label)
-    # final_solution = reopt_solution.copy()
-    # final_penalty = compute_variety_penalty(final_solution, total_periods, task_label)
-    # print("\nPacked Schedule (After Hybrid Reoptimization):")
-    # for p in range(1, total_periods+1):
-    #     print(f"Period {p:2d}: {final_solution[p]}")
-    # print(f"Final Variety Penalty: {final_penalty}")
-    # For now, we use the improved solution.
     final_solution = improved_solution.copy()
     
-    # Export the final schedule to Excel.
+    # Prepare the Excel output.
     schedule_list = [{"Period": p, "Task": final_solution[p]} for p in range(1, total_periods+1)]
     df = pd.DataFrame(schedule_list)
     base_date = datetime.strptime(base_date_str, "%Y-%m-%d")
-    def format_date_range(p):
-        start = add_period(base_date, p, period_type, period_length)
-        end = add_period(base_date, p+1, period_type, period_length) - timedelta(seconds=1)
-        return f"{start.strftime('%d/%m/%y')} -- {end.strftime('%d/%m/%y')}"
-    df["Date Range"] = df["Period"].apply(format_date_range)
+    df["Date Range"] = df["Period"].apply(lambda p: format_date_range(p, base_date, period_type, period_length))
     df = df[["Period", "Date Range", "Task"]]
     try:
         df.to_excel(output_filename, sheet_name=sheet_name, index=False)
@@ -474,8 +489,4 @@ def schedule_events():
 
 if __name__ == "__main__":
     random.seed(42)
-    # Load additional period configuration.
-    config = load_data("data.json")
-    period_type = config.get("period_type", "weeks")
-    period_length = config.get("period_length", 1)
     schedule_events()
