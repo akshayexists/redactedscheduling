@@ -1,7 +1,4 @@
-I wrote this code as a [redacted] at [redacted]. Beyond the application I was using it for which was [redacted] scheduling, I saw potential for this across various applications. I took my initial CP-Sat Algorithm, and turned it into a personal project with as much personalisation as possible. I can see myself using this in all kinds of contexts in the future, maybe if I feel like there's more potential for this I'll do up a website or GUI.
-
-For me personally, when Excel said 'I can't do that' and my brain and Google Calendar shook their heads while laughing at the constraints, this beast stepped in to schedule the unschedulable while keeping my sanity intact.
-
+I wrote this code as a [redacted] at [redacted]. Beyond the application I was using it for which was [redacted] scheduling, it has some potential for future use, at least for my personal purposes.
 # Constraint-Bound Scheduling Framework
 
 ## Overview
